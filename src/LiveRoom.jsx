@@ -94,6 +94,11 @@ export default function LiveRoom() {
       data-lk-theme="default"
       style={{ height: '100vh' }}
       onDisconnected={() => setConnectionDetails(null)}
+      onError={(err) => {
+  console.error('LiveKit connection error:', err);
+  setError(`Connection failed: ${err.message}`);
+  setConnectionDetails(null);
+}}
     >
       <VideoConference chatMessageFormatter={formatChatMessageLinks} />
     </LiveKitRoom>
