@@ -15,7 +15,7 @@
     "@livekit/components-styles": "^1.1.0",
     "livekit-client": "^2.5.0",
     "livekit-server-sdk": "^2.7.0",
-    "@livekit/egress-sdk": "^0.1.4"
+    "@livekit/egress-sdk": "^0.2.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
