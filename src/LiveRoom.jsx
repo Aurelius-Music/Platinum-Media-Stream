@@ -4,7 +4,7 @@
 //
 // Install dependencies:
 //   npm install @livekit/components-react @livekit/components-styles livekit-client
-
+import HostMediaPanel from "./HostMediaPanel";
 import { useState, useCallback, useEffect } from 'react';
 import {
   LiveKitRoom,
