@@ -2,13 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRoomContext } from "@livekit/components-react";
+import { useMediaControls } from "./MediaControls";
 import { Track } from "livekit-client";
-useEffect(() => {
-  if (!room || !videoTrack || !audioTrack || publishedRef.current) return;
-  publishedRef.current = true;
-  room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
-  room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
-}, [room, videoTrack, audioTrack]);
+
 /**
  * HostMediaPanel
  * --------------
@@ -17,13 +13,6 @@ useEffect(() => {
  * IMPORTANT: this must be rendered INSIDE <LiveKitRoom>...</LiveKitRoom>,
  * as a sibling of <VideoConference />. It reads the active room via
  * useRoomContext() — no need to pass a room variable in as a prop.
- *
- * Usage in LiveRoom.jsx, right before the closing </LiveKitRoom> tag:
- *   import HostMediaPanel from "./HostMediaPanel";
- *   ...
- *   <VideoConference chatMessageFormatter={...} />
- *   <HostMediaPanel />
- * </LiveKitRoom>
  */
 export default function HostMediaPanel({ backgroundImageUrl }) {
   const room = useRoomContext();
@@ -36,8 +25,8 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   useEffect(() => {
     if (!room || !videoTrack || !audioTrack || publishedRef.current) return;
     publishedRef.current = true;
-    room.localParticipant.publishTrack(videoTrack);
-    room.localParticipant.publishTrack(audioTrack);
+    room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
+    room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
   }, [room, videoTrack, audioTrack]);
 
   const handleLoadTrack = () => {
