@@ -9,12 +9,6 @@ useEffect(() => {
   room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
   room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
 }, [room, videoTrack, audioTrack]);
-useEffect(() => {
-  if (!room || !videoTrack || !audioTrack || publishedRef.current) return;
-  publishedRef.current = true;
-  room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
-  room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
-}, [room, videoTrack, audioTrack]);
 /**
  * HostMediaPanel
  * --------------
