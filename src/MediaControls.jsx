@@ -23,9 +23,28 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
   const canvasRef = useRef(null);
   const segmenterRef = useRef(null);
   const rafRef = useRef(null);
+  const bgImageRef = useRef(null);
+  const bgModeRef = useRef("none");
 
-  const [bgMode, setBgMode] = useState("none"); // 'none' | 'blur' | 'image'
+  const [bgMode, setBgModeState] = useState("none"); // 'none' | 'blur' | 'image'
   const [processedVideoTrack, setProcessedVideoTrack] = useState(null);
+
+  // Keep the ref in sync so the render loop (which never re-reads state) sees changes live
+  const setBgMode = useCallback((mode) => {
+    bgModeRef.current = mode;
+    setBgModeState(mode);
+  }, []);
+
+  // Swap the background image at any time without restarting the camera/segmenter
+  const setBackgroundImage = useCallback((urlOrFile) => {
+    const url =
+      typeof urlOrFile === "string" ? urlOrFile : URL.createObjectURL(urlOrFile);
+    const img = new Image();
+    img.onload = () => {
+      bgImageRef.current = img;
+    };
+    img.src = url;
+  }, []);
 
   // ---------- BACKGROUND EFFECT ----------
   useEffect(() => {
@@ -47,18 +66,15 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
       canvasRef.current = canvas;
       const ctx = canvas.getContext("2d");
 
+      if (backgroundImageUrl) {
+        setBackgroundImage(backgroundImageUrl);
+      }
+
       const segmenter = new SelfieSegmentation({
         locateFile: (file) =>
           `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
       });
       segmenter.setOptions({ modelSelection: 1 });
-
-      let bgImage = null;
-      if (backgroundImageUrl) {
-        bgImage = new Image();
-        bgImage.src = backgroundImageUrl;
-        await new Promise((res) => (bgImage.onload = res));
-      }
 
       segmenter.onResults((results) => {
         if (cancelled) return;
@@ -71,14 +87,15 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
         ctx.globalCompositeOperation = "destination-over";
-        if (bgMode === "blur") {
+        const mode = bgModeRef.current;
+        if (mode === "blur") {
           ctx.filter = "blur(12px)";
           ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
           ctx.filter = "none";
-        } else if (bgMode === "image" && bgImage) {
-          ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        } else if (mode === "image" && bgImageRef.current) {
+          ctx.drawImage(bgImageRef.current, 0, 0, canvas.width, canvas.height);
         } else {
-          // 'none' — just show the raw feed
+          // 'none', or 'image' with nothing loaded yet — show the raw feed
           ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
         }
         ctx.restore();
@@ -105,11 +122,12 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       segmenterRef.current?.close();
     };
-  }, [backgroundImageUrl]); // bgMode read inside closure via ref if you want live switching
+  }, []); // runs once; bgMode/bgImage now update live via refs, not restarts
 
   // ---------- MUSIC MIXING ----------
   const audioCtxRef = useRef(null);
   const musicElRef = useRef(null);
+  const musicGainRef = useRef(null);
   const [processedAudioTrack, setProcessedAudioTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolumeState] = useState(0.5);
@@ -130,6 +148,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
       const musicSource = audioCtx.createMediaElementSource(musicEl);
       const musicGain = audioCtx.createGain();
       musicGain.gain.value = volume;
+      musicGainRef.current = musicGain;
       musicSource.connect(musicGain);
 
       const destination = audioCtx.createMediaStreamDestination();
@@ -149,8 +168,10 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     };
   }, []);
 
-  const loadTrack = useCallback((url) => {
+  const loadTrack = useCallback((urlOrFile) => {
     if (!musicElRef.current) return;
+    const url =
+      typeof urlOrFile === "string" ? urlOrFile : URL.createObjectURL(urlOrFile);
     musicElRef.current.src = url;
   }, []);
 
@@ -166,7 +187,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
 
   const setVolume = useCallback((v) => {
     setVolumeState(v);
-    // find the gain node — simplest is to store a ref to it above; omitted here for brevity
+    if (musicGainRef.current) musicGainRef.current.gain.value = v;
   }, []);
 
   return {
@@ -174,6 +195,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     audioTrack: processedAudioTrack,
     bgMode,
     setBgMode,
+    setBackgroundImage,
     music: { loadTrack, play, pause, isPlaying, volume, setVolume },
   };
 }
