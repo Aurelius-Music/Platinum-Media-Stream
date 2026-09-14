@@ -12,6 +12,7 @@ import {
   formatChatMessageLinks,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
+export default function LiveRoom() {
 
 
   const [connectionDetails, setConnectionDetails] = useState(null);
