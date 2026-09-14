@@ -174,8 +174,8 @@ export default function LiveRoom() {
       serverUrl={connectionDetails.url}
       token={connectionDetails.token}
       connect={true}
-      video={true}
-      audio={true}
+      video={false}
+      audio={false)
       data-lk-theme="default"
       style={{ height: '100vh' }}
       onDisconnected={() => setConnectionDetails(null)}
