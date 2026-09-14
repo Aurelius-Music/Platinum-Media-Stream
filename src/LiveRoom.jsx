@@ -186,8 +186,8 @@ export default function LiveRoom() {
       }}
     >
       {isHost && <BroadcastControls roomName={roomName.trim()} />}
-<VideoConference chatMessageFormatter={formatChatMessageLinks} /><VideoConference ... />
-</LiveKitRoom><VideoConference/>
+<VideoConference chatMessageFormatter={formatChatMessageLinks} /><VideoConference ... /><VideoConference ... />
+</LiveKitRoom>
   );
 }
 
