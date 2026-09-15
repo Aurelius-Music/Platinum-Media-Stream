@@ -1,10 +1,9 @@
 // src/LiveRoom.jsx
 // Multi-user live camera chat room, built on LiveKit.
-// Now includes: shareable invite link (auto-fills room name), native share sheet, and QR code.
-//
-// Install dependencies:
-//   npm install @livekit/components-react @livekit/components-styles livekit-client
+// Now includes: shareable invite link, native share sheet, QR code, and Supabase member login.
 import HostMediaPanel from "./HostMediaPanel";
+import Login from "./Login";
+import { supabase } from "./supabaseClient";
 import { useState, useCallback, useEffect } from 'react';
 import {
   LiveKitRoom,
@@ -12,9 +11,8 @@ import {
   formatChatMessageLinks,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
+
 export default function LiveRoom() {
-
-
   const [connectionDetails, setConnectionDetails] = useState(null);
   const [roomName, setRoomName] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -23,6 +21,17 @@ export default function LiveRoom() {
   const [showInvite, setShowInvite] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [session, setSession] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Track Supabase login state
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   // Pre-fill room name from a shared link, e.g. yoursite.app/?room=myroom
   useEffect(() => {
@@ -66,20 +75,19 @@ export default function LiveRoom() {
     setError('');
 
     try {
-      const identity = `${displayName}-${Math.random().toString(36).slice(2, 8)}`;
-      const res = await fetch('/api/livekit-token', {
+      const res = await fetch('/api/get-room-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          room: roomName.trim(),
-          identity,
-          name: displayName.trim(),
+          roomName: roomName.trim(),
+          accessToken: session?.access_token || null,
+          displayName: displayName.trim(),
           isHost,
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to get access token');
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to get access token');
 
       if (!data.token || !data.url) {
         throw new Error(
@@ -92,7 +100,12 @@ export default function LiveRoom() {
       console.error(err);
       setError(err.message || 'Could not join the room. Try again.');
     }
-  }, [roomName, displayName, isHost]);
+  }, [roomName, displayName, isHost, session]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setShowLogin(false);
+  };
 
   // --- Pre-join screen ---
   if (!connectionDetails) {
@@ -101,6 +114,21 @@ export default function LiveRoom() {
         <div style={styles.card}>
           <img src="/logo.png" alt="Platinum Media Stream" style={styles.logo} />
           <h2 style={styles.title}>Join a Live Room</h2>
+
+          <div style={styles.authRow}>
+            {session ? (
+              <>
+                <span style={styles.authStatus}>Logged in as {session.user.email}</span>
+                <button style={styles.secondaryButton} onClick={handleLogout}>Log out</button>
+              </>
+            ) : showLogin ? (
+              <Login onAuthed={(s) => { setSession(s); setShowLogin(false); }} />
+            ) : (
+              <button style={styles.secondaryButton} onClick={() => setShowLogin(true)}>
+                Log in (for private rooms)
+              </button>
+            )}
+          </div>
 
           <button style={styles.helpButton} onClick={() => setShowHelp((v) => !v)}>
             {showHelp ? 'Hide instructions ▲' : '❓ How to use this app'}
@@ -270,6 +298,8 @@ const styles = {
   },
   title: { color: '#fff', margin: 0, marginBottom: '8px' },
   logo: { width: '100%', maxWidth: '260px', margin: '0 auto 8px', display: 'block' },
+  authRow: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  authStatus: { color: '#9b8cff', fontSize: '12px' },
   input: {
     padding: '10px 12px',
     borderRadius: '8px',
