@@ -19,15 +19,26 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music } =
     useMediaControls({ backgroundImageUrl });
   const [trackUrl, setTrackUrl] = useState("");
-  const publishedRef = useRef(false);
+  const videoPublishedRef = useRef(false);
+  const audioPublishedRef = useRef(false);
 
-  // Publish the processed tracks once, replacing the default camera/mic
+  // Publish video as soon as it's ready — doesn't wait on audio
   useEffect(() => {
-    if (!room || !videoTrack || !audioTrack || publishedRef.current) return;
-    publishedRef.current = true;
-    room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
-    room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
-  }, [room, videoTrack, audioTrack]);
+    if (!room || !videoTrack || videoPublishedRef.current) return;
+    videoPublishedRef.current = true;
+    room.localParticipant
+      .publishTrack(videoTrack, { source: Track.Source.Camera })
+      .catch((err) => console.error("Failed to publish video track:", err));
+  }, [room, videoTrack]);
+
+  // Publish audio separately, whenever it's ready
+  useEffect(() => {
+    if (!room || !audioTrack || audioPublishedRef.current) return;
+    audioPublishedRef.current = true;
+    room.localParticipant
+      .publishTrack(audioTrack, { source: Track.Source.Microphone })
+      .catch((err) => console.error("Failed to publish audio track:", err));
+  }, [room, audioTrack]);
 
   const handleLoadTrack = () => {
     if (!trackUrl) return;
