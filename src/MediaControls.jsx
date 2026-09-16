@@ -133,9 +133,16 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const micSource = audioCtx.createMediaStreamSource(micStream);
 
+        // Attach the music element to the DOM (hidden) — some mobile browsers
+        // refuse to play audio on an element that's never inserted into the page,
+        // even after a direct user tap.
         const musicEl = document.createElement("audio");
         musicEl.crossOrigin = "anonymous";
+        musicEl.style.display = "none";
+        musicEl.setAttribute("playsinline", "");
+        document.body.appendChild(musicEl);
         musicElRef.current = musicEl;
+
         const musicSource = audioCtx.createMediaElementSource(musicEl);
         const musicGain = audioCtx.createGain();
         musicGain.gain.value = volume;
@@ -159,6 +166,9 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     return () => {
       cancelled = true;
       audioCtxRef.current?.close();
+      if (musicElRef.current) {
+        musicElRef.current.remove();
+      }
     };
   }, []);
 
@@ -170,7 +180,12 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
   }, []);
 
   const play = useCallback(() => {
-    musicElRef.current?.play().catch((err) => console.error("Music play failed:", err));
+    // Resume the AudioContext on a real user gesture — mobile browsers
+    // suspend it by default until this is called from a tap.
+    audioCtxRef.current?.resume();
+    musicElRef.current
+      ?.play()
+      .catch((err) => console.error("Music play failed:", err));
     setIsPlaying(true);
   }, []);
 
