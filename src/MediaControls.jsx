@@ -141,6 +141,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         musicEl.style.display = "none";
         musicEl.setAttribute("playsinline", "");
         document.body.appendChild(musicEl);
+        musicEl.muted = true;
         musicElRef.current = musicEl;
 
         const musicSource = audioCtx.createMediaElementSource(musicEl);
