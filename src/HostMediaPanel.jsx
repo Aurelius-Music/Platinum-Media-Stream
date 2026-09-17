@@ -37,4 +37,4 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
     audioPublishedRef.current = true;
     room.localParticipant
       .publishTrack(audioTrack, { source: Track.Source.Microphone })
-      .catch((err) => console.error("Failed to publ
+      .catch((err) => console.error("Failed to publish audio track:", err));
