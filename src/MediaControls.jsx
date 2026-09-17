@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { LocalVideoTrack, LocalAudioTrack } from "livekit-client";
-import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
+// Note: no npm import for SelfieSegmentation — it's loaded via <script> in
+// index.html and used as window.SelfieSegmentation. This avoids the Vite
+// minification bug that broke the named npm import in production builds.
 
 export function useMediaControls({ backgroundImageUrl } = {}) {
   const videoElRef = useRef(null);
@@ -41,17 +43,28 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
 
       try {
         camStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            aspectRatio: { ideal: 16 / 9 },
+          },
         });
         videoEl = document.createElement("video");
         videoEl.srcObject = camStream;
         videoEl.muted = true;
+        videoEl.playsInline = true;
         await videoEl.play();
         videoElRef.current = videoEl;
 
+        // Size the canvas to match what the camera actually gave us,
+        // instead of a hardcoded 1280x720 — this is what fixes the stretching.
+        const settings = camStream.getVideoTracks()[0].getSettings();
+        const actualWidth = settings.width || videoEl.videoWidth || 1280;
+        const actualHeight = settings.height || videoEl.videoHeight || 720;
+
         canvas = document.createElement("canvas");
-        canvas.width = 1280;
-        canvas.height = 720;
+        canvas.width = actualWidth;
+        canvas.height = actualHeight;
         canvasRef.current = canvas;
         ctx = canvas.getContext("2d");
       } catch (err) {
@@ -65,7 +78,13 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
       }
 
       try {
-        const segmenter = new SelfieSegmentation({
+        if (!window.SelfieSegmentation) {
+          throw new Error(
+            "SelfieSegmentation script not loaded — check index.html CDN script tag"
+          );
+        }
+
+        const segmenter = new window.SelfieSegmentation({
           locateFile: (file) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
         });
@@ -108,7 +127,10 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         };
         renderLoop();
       } catch (err) {
-        console.error("Segmenter failed to initialize — falling back to raw camera passthrough:", err);
+        console.error(
+          "Segmenter failed to initialize — falling back to raw camera passthrough:",
+          err
+        );
         setDebugError(`Segmenter init failed: ${err.message || err}`);
         const fallbackLoop = () => {
           if (cancelled) return;
