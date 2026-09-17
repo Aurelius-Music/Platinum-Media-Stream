@@ -106,7 +106,108 @@ export default function LiveRoom() {
     await supabase.auth.signOut();
     setShowLogin(false);
   };
+  // --rmtp settings controls---
+  function BroadcastControls({ roomName }) {
+  const [egressId, setEgressId] = useState(null);
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showRtmpForm, setShowRtmpForm] = useState(false);
+  const [rtmpUrl, setRtmpUrl] = useState('');
+  const [streamKey, setStreamKey] = useState('');
 
+  const goLive = async () => {
+    if (!rtmpUrl.trim() || !streamKey.trim()) {
+      setStatus('Enter your stream URL and stream key first.');
+      setShowRtmpForm(true);
+      return;
+    }
+
+    setBusy(true);
+    setStatus('');
+    try {
+      const res = await fetch('/api/start-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: roomName,
+          rtmpUrl: rtmpUrl.trim(),
+          streamKey: streamKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start broadcast');
+      setEgressId(data.egressId);
+      setStatus('🔴 Live');
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stopLive = async () => {
+    if (!egressId) return;
+    setBusy(true);
+    try {
+      await fetch('/api/stop-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ egressId }),
+      });
+      setEgressId(null);
+      setStatus('Stopped');
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={styles.broadcastBar}>
+      {!egressId && (
+        <button
+          style={styles.secondaryButton}
+          onClick={() => setShowRtmpForm((v) => !v)}
+        >
+          {showRtmpForm ? 'Hide' : '⚙ Stream settings'}
+        </button>
+      )}
+
+      {showRtmpForm && !egressId && (
+        <div style={styles.rtmpForm}>
+          <input
+            style={styles.rtmpInput}
+            placeholder="Stream URL (e.g. rtmps://live-api-s.facebook.com:443/rtmp/)"
+            value={rtmpUrl}
+            onChange={(e) => setRtmpUrl(e.target.value)}
+          />
+          <input
+            style={styles.rtmpInput}
+            placeholder="Stream key"
+            type="password"
+            value={streamKey}
+            onChange={(e) => setStreamKey(e.target.value)}
+          />
+          <p style={styles.rtmpHint}>
+            Get these from Facebook's Live Producer (or your platform's live streaming dashboard).
+          </p>
+        </div>
+      )}
+
+      {!egressId ? (
+        <button style={styles.goLiveButton} onClick={goLive} disabled={busy}>
+          {busy ? 'Starting...' : '🔴 Go Live'}
+        </button>
+      ) : (
+        <button style={styles.stopLiveButton} onClick={stopLive} disabled={busy}>
+          {busy ? 'Stopping...' : '⏹ Stop Broadcast'}
+        </button>
+      )}
+      {status && <span style={styles.broadcastStatus}>{status}</span>}
+    </div>
+  );
+  }
   // --- Pre-join screen ---
   if (!connectionDetails) {
     return (
@@ -394,4 +495,5 @@ const styles = {
     gap: '8px',
   },
   helpLine: { color: '#ccc', fontSize: '12px', margin: 0, lineHeight: 1.4 },
+  
 };
