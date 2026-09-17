@@ -9,5 +9,13 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.addEventListener('load', () => {
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;padding:10px;font-size:14px;font-family:monospace;';
+        banner.textContent = 'SelfieSegmentation type: ' + typeof window.SelfieSegmentation;
+        document.body.appendChild(banner);
+      });
+    </script>
   </body>
 </html>
