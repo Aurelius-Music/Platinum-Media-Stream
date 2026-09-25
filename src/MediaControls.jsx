@@ -157,6 +157,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
   const audioCtxRef = useRef(null);
   const musicElRef = useRef(null);
   const musicGainRef = useRef(null);
+  const sfxGainRef = useRef(null);
   const [processedAudioTrack, setProcessedAudioTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolumeState] = useState(0.5);
@@ -189,6 +190,12 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         const destination = audioCtx.createMediaStreamDestination();
         micSource.connect(destination);
         musicGain.connect(destination);
+
+        // ---------- SOUND EFFECTS BUS ----------
+        const sfxGain = audioCtx.createGain();
+        sfxGain.gain.value = 0.9;
+        sfxGain.connect(destination);
+        sfxGainRef.current = sfxGain;
 
         if (!cancelled) {
           const track = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
@@ -235,6 +242,27 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     if (musicGainRef.current) musicGainRef.current.gain.value = v;
   }, []);
 
+  // ---------- SOUND EFFECTS ----------
+  const playSfx = useCallback((url) => {
+    if (!audioCtxRef.current || !sfxGainRef.current) return;
+    const el = document.createElement("audio");
+    el.crossOrigin = "anonymous";
+    el.src = url;
+    el.muted = true; // heard by others in the mix, not played locally — same as music
+    el.setAttribute("playsinline", "");
+    document.body.appendChild(el);
+
+    audioCtxRef.current.resume();
+    const source = audioCtxRef.current.createMediaElementSource(el);
+    source.connect(sfxGainRef.current);
+
+    el.play().catch((err) => console.error("SFX play failed:", err));
+    el.onended = () => {
+      source.disconnect();
+      el.remove();
+    };
+  }, []);
+
   return {
     videoTrack: processedVideoTrack,
     audioTrack: processedAudioTrack,
@@ -242,6 +270,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     setBgMode,
     setBackgroundImage,
     music: { loadTrack, play, pause, isPlaying, volume, setVolume },
+    sfx: { play: playSfx },
     debugError,
   };
 }
