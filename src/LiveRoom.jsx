@@ -69,7 +69,6 @@ export default function LiveRoom() {
   const [session, setSession] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
 
-  // Track Supabase login state
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
@@ -78,7 +77,6 @@ export default function LiveRoom() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Pre-fill room name from a shared link, e.g. yoursite.app/?room=myroom
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sharedRoom = params.get('room');
@@ -152,7 +150,6 @@ export default function LiveRoom() {
     setShowLogin(false);
   };
 
-  // --- Pre-join screen ---
   if (!connectionDetails) {
     return (
       <div style={styles.wrapper}>
@@ -241,7 +238,6 @@ export default function LiveRoom() {
     );
   }
 
-  // --- Connected room view ---
   return (
     <LiveKitRoom
       serverUrl={connectionDetails.url}
@@ -265,7 +261,6 @@ export default function LiveRoom() {
   );
 }
 
-// --- Broadcast/RTMP controls (top-level — do NOT nest this inside LiveRoom) ---
 function BroadcastControls({ roomName }) {
   const [egressId, setEgressId] = useState(null);
   const [status, setStatus] = useState('');
@@ -350,6 +345,12 @@ function BroadcastControls({ roomName }) {
 
       {showRtmpForm && !egressId && (
         <div style={styles.rtmpForm}>
+          <button
+            style={styles.rtmpCloseButton}
+            onClick={() => setShowRtmpForm(false)}
+          >
+            ✕
+          </button>
           <select
             style={styles.rtmpSelect}
             value={platform}
@@ -527,6 +528,16 @@ const styles = {
     gap: '8px',
     width: '280px',
     boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+  },
+  rtmpCloseButton: {
+    alignSelf: 'flex-end',
+    background: 'transparent',
+    border: 'none',
+    color: '#999',
+    fontSize: '16px',
+    cursor: 'pointer',
+    padding: 0,
+    lineHeight: 1,
   },
   rtmpSelect: {
     padding: '8px 10px',
