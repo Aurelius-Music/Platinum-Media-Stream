@@ -178,7 +178,6 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         const micSource = audioCtx.createMediaStreamSource(micStream);
 
         const musicEl = document.createElement("audio");
-        musicEl.crossOrigin = "anonymous";
         musicEl.style.display = "none";
         musicEl.setAttribute("playsinline", "");
         document.body.appendChild(musicEl);
@@ -232,11 +231,23 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     };
   }, []);
 
-  const loadTrack = useCallback((urlOrFile) => {
+  // Fetch remote URLs as blobs first — sidesteps Chrome/Android silently
+  // zeroing out cross-origin audio when it's captured into MediaStreamDestination.
+  // A blob: URL is always same-origin, so no tainting occurs.
+  const loadTrack = useCallback(async (urlOrFile) => {
     if (!musicElRef.current) return;
-    const url =
-      typeof urlOrFile === "string" ? urlOrFile : URL.createObjectURL(urlOrFile);
-    musicElRef.current.src = url;
+    if (typeof urlOrFile === "string") {
+      try {
+        const res = await fetch(urlOrFile);
+        const blob = await res.blob();
+        musicElRef.current.src = URL.createObjectURL(blob);
+      } catch (err) {
+        console.error("Failed to fetch track:", err);
+        setDebugError(`Track fetch failed: ${err.message || err}`);
+      }
+    } else {
+      musicElRef.current.src = URL.createObjectURL(urlOrFile);
+    }
   }, []);
 
   const play = useCallback(() => {
@@ -257,25 +268,34 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     if (musicGainRef.current) musicGainRef.current.gain.value = v;
   }, []);
 
-  const playSfx = useCallback((url) => {
+  const playSfx = useCallback(async (url) => {
     if (!audioCtxRef.current || !sfxGainRef.current) return;
-    const el = document.createElement("audio");
-    el.crossOrigin = "anonymous";
-    el.src = url;
-    el.muted = true; // heard by others in the mix, not played locally — same as music
-    el.volume = 0;
-    el.setAttribute("playsinline", "");
-    document.body.appendChild(el);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
 
-    audioCtxRef.current.resume();
-    const source = audioCtxRef.current.createMediaElementSource(el);
-    source.connect(sfxGainRef.current);
+      const el = document.createElement("audio");
+      el.src = blobUrl;
+      el.muted = true;
+      el.volume = 0;
+      el.setAttribute("playsinline", "");
+      document.body.appendChild(el);
 
-    el.play().catch((err) => console.error("SFX play failed:", err));
-    el.onended = () => {
-      source.disconnect();
-      el.remove();
-    };
+      audioCtxRef.current.resume();
+      const source = audioCtxRef.current.createMediaElementSource(el);
+      source.connect(sfxGainRef.current);
+
+      el.play().catch((err) => console.error("SFX play failed:", err));
+      el.onended = () => {
+        source.disconnect();
+        el.remove();
+        URL.revokeObjectURL(blobUrl);
+      };
+    } catch (err) {
+      console.error("SFX fetch/play failed:", err);
+      setDebugError(`SFX error: ${err.message || err}`);
+    }
   }, []);
 
   return {
