@@ -183,6 +183,7 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         musicEl.setAttribute("playsinline", "");
         document.body.appendChild(musicEl);
         musicEl.muted = true;
+        musicEl.volume = 0;
         musicElRef.current = musicEl;
 
         const musicSource = audioCtx.createMediaElementSource(musicEl);
@@ -261,7 +262,8 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     const el = document.createElement("audio");
     el.crossOrigin = "anonymous";
     el.src = url;
-    el.muted = true;
+    el.muted = true; // heard by others in the mix, not played locally — same as music
+    el.volume = 0;
     el.setAttribute("playsinline", "");
     document.body.appendChild(el);
 
