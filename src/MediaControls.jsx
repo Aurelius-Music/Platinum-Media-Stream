@@ -1,4 +1,3 @@
-
 import { useRef, useState, useEffect, useCallback } from "react";
 import { LocalVideoTrack, LocalAudioTrack } from "livekit-client";
 // Note: no npm import for SelfieSegmentation — it's loaded via <script> in
@@ -57,8 +56,6 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         await videoEl.play();
         videoElRef.current = videoEl;
 
-        // Size the canvas to match what the camera actually gave us,
-        // instead of a hardcoded 1280x720 — this is what fixes the stretching.
         const settings = camStream.getVideoTracks()[0].getSettings();
         const actualWidth = settings.width || videoEl.videoWidth || 1280;
         const actualHeight = settings.height || videoEl.videoHeight || 720;
@@ -194,15 +191,25 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
         musicGainRef.current = musicGain;
         musicSource.connect(musicGain);
 
-        const destination = audioCtx.createMediaStreamDestination();
-        micSource.connect(destination);
-        musicGain.connect(destination);
-
         // ---------- SOUND EFFECTS BUS ----------
         const sfxGain = audioCtx.createGain();
         sfxGain.gain.value = 0.9;
-        sfxGain.connect(destination);
         sfxGainRef.current = sfxGain;
+
+        // ---------- LIMITER — caps the combined mix so it can't clip/distort ----------
+        const limiter = audioCtx.createDynamicsCompressor();
+        limiter.threshold.value = -6;
+        limiter.knee.value = 0;
+        limiter.ratio.value = 20;
+        limiter.attack.value = 0.003;
+        limiter.release.value = 0.25;
+
+        const destination = audioCtx.createMediaStreamDestination();
+
+        micSource.connect(limiter);
+        musicGain.connect(limiter);
+        sfxGain.connect(limiter);
+        limiter.connect(destination);
 
         if (!cancelled) {
           const track = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
@@ -249,13 +256,12 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     if (musicGainRef.current) musicGainRef.current.gain.value = v;
   }, []);
 
-  // ---------- SOUND EFFECTS ----------
   const playSfx = useCallback((url) => {
     if (!audioCtxRef.current || !sfxGainRef.current) return;
     const el = document.createElement("audio");
     el.crossOrigin = "anonymous";
     el.src = url;
-    el.muted = true; // heard by others in the mix, not played locally — same as music
+    el.muted = true;
     el.setAttribute("playsinline", "");
     document.body.appendChild(el);
 
