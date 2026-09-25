@@ -21,6 +21,7 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, sfx, debugError } =
     useMediaControls({ backgroundImageUrl });
   const [trackUrl, setTrackUrl] = useState("");
+  const [collapsed, setCollapsed] = useState(true); // start collapsed so video isn't blocked
   const videoPublishedRef = useRef(false);
   const audioPublishedRef = useRef(false);
 
@@ -59,91 +60,118 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   };
 
   return (
-    <div style={panelStyle}>
-      {debugError && (
-        <div style={debugStyle}>⚠ {debugError}</div>
+    <div style={wrapperStyle}>
+      <button style={toggleButtonStyle} onClick={() => setCollapsed((v) => !v)}>
+        {collapsed ? "▲ Media Controls" : "▼ Hide Media Controls"}
+      </button>
+
+      {!collapsed && (
+        <div style={panelStyle}>
+          {debugError && (
+            <div style={debugStyle}>⚠ {debugError}</div>
+          )}
+
+          <div style={rowStyle}>
+            <span style={labelStyle}>Background</span>
+            <button style={btn(bgMode === "none")} onClick={() => setBgMode("none")}>
+              None
+            </button>
+            <button style={btn(bgMode === "blur")} onClick={() => setBgMode("blur")}>
+              Blur
+            </button>
+            <label style={{ ...btn(bgMode === "image"), cursor: "pointer" }}>
+              Image
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLocalImageFile}
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
+
+          <div style={rowStyle}>
+            <span style={labelStyle}>Music</span>
+            <label style={{ ...btn(false), cursor: "pointer" }}>
+              Choose file
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={handleLocalMusicFile}
+                style={{ display: "none" }}
+              />
+            </label>
+            <input
+              type="text"
+              placeholder="or paste track URL"
+              value={trackUrl}
+              onChange={(e) => setTrackUrl(e.target.value)}
+              style={inputStyle}
+            />
+            <button style={btn(false)} onClick={handleLoadTrack}>
+              Load URL
+            </button>
+            <button style={btn(false)} onClick={music.isPlaying ? music.pause : music.play}>
+              {music.isPlaying ? "Pause" : "Play"}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={music.volume}
+              onChange={(e) => music.setVolume(parseFloat(e.target.value))}
+            />
+          </div>
+
+          <div style={rowStyle}>
+            <span style={labelStyle}>SFX</span>
+            {SFX_LIST.map((s) => (
+              <button
+                key={s.file}
+                style={btn(false)}
+                onClick={() => sfx.play(SFX_BASE + encodeURIComponent(s.file))}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
-
-      <div style={rowStyle}>
-        <span style={labelStyle}>Background</span>
-        <button style={btn(bgMode === "none")} onClick={() => setBgMode("none")}>
-          None
-        </button>
-        <button style={btn(bgMode === "blur")} onClick={() => setBgMode("blur")}>
-          Blur
-        </button>
-        <label style={{ ...btn(bgMode === "image"), cursor: "pointer" }}>
-          Image
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleLocalImageFile}
-            style={{ display: "none" }}
-          />
-        </label>
-      </div>
-
-      <div style={rowStyle}>
-        <span style={labelStyle}>Music</span>
-        <label style={{ ...btn(false), cursor: "pointer" }}>
-          Choose file
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={handleLocalMusicFile}
-            style={{ display: "none" }}
-          />
-        </label>
-        <input
-          type="text"
-          placeholder="or paste track URL"
-          value={trackUrl}
-          onChange={(e) => setTrackUrl(e.target.value)}
-          style={inputStyle}
-        />
-        <button style={btn(false)} onClick={handleLoadTrack}>
-          Load URL
-        </button>
-        <button style={btn(false)} onClick={music.isPlaying ? music.pause : music.play}>
-          {music.isPlaying ? "Pause" : "Play"}
-        </button>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={music.volume}
-          onChange={(e) => music.setVolume(parseFloat(e.target.value))}
-        />
-      </div>
-
-      <div style={rowStyle}>
-        <span style={labelStyle}>SFX</span>
-        {SFX_LIST.map((s) => (
-          <button
-            key={s.file}
-            style={btn(false)}
-            onClick={() => sfx.play(SFX_BASE + encodeURIComponent(s.file))}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
 
-const panelStyle = {
+const wrapperStyle = {
   position: "absolute",
   bottom: 80,
   left: 0,
   right: 0,
+  zIndex: 20,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+};
+
+const toggleButtonStyle = {
+  padding: "6px 16px",
+  borderRadius: "999px",
+  border: "1px solid #444",
+  background: "#1a1a1a",
+  color: "#fff",
+  fontSize: 12,
+  cursor: "pointer",
+  marginBottom: 6,
+  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+};
+
+const panelStyle = {
+  width: "100%",
   background: "rgba(0,0,0,0.6)",
   padding: "10px 14px",
   display: "flex",
   flexDirection: "column",
   gap: 8,
-  zIndex: 20,
 };
 
 const debugStyle = {
