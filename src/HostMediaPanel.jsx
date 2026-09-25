@@ -5,12 +5,22 @@ import { useRoomContext } from "@livekit/components-react";
 import { useMediaControls } from "./MediaControls";
 import { Track } from "livekit-client";
 
+const SFX_BASE = "https://kqvrjlnpxrlgxnmbdixd.supabase.co/storage/v1/object/public/sfx/";
+
+const SFX_LIST = [
+  { label: "💨 Woosh", file: "mixkit-air-woosh-1489 (1).wav" },
+  { label: "⏰ Tick Tock", file: "mixkit-tick-tock-clock-timer-1045.wav" },
+  { label: "🤖 Hum", file: "mixkit-technological-futuristic-hum-2133.wav" },
+  { label: "😢 Sad Trombone", file: "mixkit-sad-game-over-trombone-471.wav" },
+  { label: "👊 Punch", file: "mixkit-martial-arts-fast-punch-2047.wav" },
+  { label: "🐦 Birds", file: "mixkit-little-birds-singing-in-the-trees-17.wav" },
+];
+
 export default function HostMediaPanel({ backgroundImageUrl }) {
   const room = useRoomContext();
-  const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, debugError } =
+  const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, sfx, debugError } =
     useMediaControls({ backgroundImageUrl });
   const [trackUrl, setTrackUrl] = useState("");
-  const [showPanel, setShowPanel] = useState(false);
   const videoPublishedRef = useRef(false);
   const audioPublishedRef = useRef(false);
 
@@ -49,115 +59,91 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   };
 
   return (
-    <>
-      {/* Always-visible toggle — sits alongside Stream settings / Go Live */}
-      <button
-        style={toggleButtonStyle}
-        onClick={() => setShowPanel((v) => !v)}
-      >
-        {showPanel ? "Hide" : "🎨 Media"}
-      </button>
-
+    <div style={panelStyle}>
       {debugError && (
-        <div style={{ ...debugStyle, ...debugPositionStyle }}>⚠ {debugError}</div>
+        <div style={debugStyle}>⚠ {debugError}</div>
       )}
 
-      {showPanel && (
-        <div style={panelStyle}>
-          <div style={rowStyle}>
-            <span style={labelStyle}>Background</span>
-            <button style={btn(bgMode === "none")} onClick={() => setBgMode("none")}>
-              None
-            </button>
-            <button style={btn(bgMode === "blur")} onClick={() => setBgMode("blur")}>
-              Blur
-            </button>
-            <label style={{ ...btn(bgMode === "image"), cursor: "pointer" }}>
-              Image
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleLocalImageFile}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Background</span>
+        <button style={btn(bgMode === "none")} onClick={() => setBgMode("none")}>
+          None
+        </button>
+        <button style={btn(bgMode === "blur")} onClick={() => setBgMode("blur")}>
+          Blur
+        </button>
+        <label style={{ ...btn(bgMode === "image"), cursor: "pointer" }}>
+          Image
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleLocalImageFile}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
 
-          <div style={rowStyle}>
-            <span style={labelStyle}>Music</span>
-            <label style={{ ...btn(false), cursor: "pointer" }}>
-              Choose file
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleLocalMusicFile}
-                style={{ display: "none" }}
-              />
-            </label>
-            <input
-              type="text"
-              placeholder="or paste track URL"
-              value={trackUrl}
-              onChange={(e) => setTrackUrl(e.target.value)}
-              style={inputStyle}
-            />
-            <button style={btn(false)} onClick={handleLoadTrack}>
-              Load URL
-            </button>
-            <button style={btn(false)} onClick={music.isPlaying ? music.pause : music.play}>
-              {music.isPlaying ? "Pause" : "Play"}
-            </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={music.volume}
-              onChange={(e) => music.setVolume(parseFloat(e.target.value))}
-            />
-          </div>
-        </div>
-      )}
-    </>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Music</span>
+        <label style={{ ...btn(false), cursor: "pointer" }}>
+          Choose file
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={handleLocalMusicFile}
+            style={{ display: "none" }}
+          />
+        </label>
+        <input
+          type="text"
+          placeholder="or paste track URL"
+          value={trackUrl}
+          onChange={(e) => setTrackUrl(e.target.value)}
+          style={inputStyle}
+        />
+        <button style={btn(false)} onClick={handleLoadTrack}>
+          Load URL
+        </button>
+        <button style={btn(false)} onClick={music.isPlaying ? music.pause : music.play}>
+          {music.isPlaying ? "Pause" : "Play"}
+        </button>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={music.volume}
+          onChange={(e) => music.setVolume(parseFloat(e.target.value))}
+        />
+      </div>
+
+      <div style={rowStyle}>
+        <span style={labelStyle}>SFX</span>
+        {SFX_LIST.map((s) => (
+          <button
+            key={s.file}
+            style={btn(false)}
+            onClick={() => sfx.play(SFX_BASE + encodeURIComponent(s.file))}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
-
-// Sits in the same fixed top row as "⚙ Stream settings" / "🔴 Go Live",
-// just further along so all three sit side by side.
-const toggleButtonStyle = {
-  position: "fixed",
-  top: 8,
-  right: 8,
-  zIndex: 50,
-  padding: "8px 14px",
-  borderRadius: 999,
-  border: "1px solid #444",
-  background: "#232323",
-  color: "#fff",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
 
 const panelStyle = {
   position: "absolute",
   bottom: 80,
   left: 0,
   right: 0,
-  background: "rgba(0,0,0,0.75)",
+  background: "rgba(0,0,0,0.6)",
   padding: "10px 14px",
   display: "flex",
   flexDirection: "column",
   gap: 8,
   zIndex: 20,
-};
-
-const debugPositionStyle = {
-  position: "fixed",
-  top: 56,
-  right: 8,
-  left: 8,
-  zIndex: 49,
 };
 
 const debugStyle = {
@@ -193,11 +179,4 @@ const inputStyle = {
 
 function btn(active) {
   return {
-    padding: "6px 10px",
-    borderRadius: 6,
-    border: "none",
-    background: active ? "#e11d48" : "#333",
-    color: "#fff",
-    fontSize: 12,
-  };
-}
+    p
