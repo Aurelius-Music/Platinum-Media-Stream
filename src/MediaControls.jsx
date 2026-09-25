@@ -1,311 +1,217 @@
-import { useRef, useState, useEffect, useCallback } from "react";
-import { LocalVideoTrack, LocalAudioTrack } from "livekit-client";
-// Note: no npm import for SelfieSegmentation — it's loaded via <script> in
-// index.html and used as window.SelfieSegmentation. This avoids the Vite
-// minification bug that broke the named npm import in production builds.
+"use client";
 
-export function useMediaControls({ backgroundImageUrl } = {}) {
-  const videoElRef = useRef(null);
-  const canvasRef = useRef(null);
-  const segmenterRef = useRef(null);
-  const rafRef = useRef(null);
-  const bgImageRef = useRef(null);
-  const bgModeRef = useRef("none");
+import { useState, useEffect, useRef } from "react";
+import { useRoomContext } from "@livekit/components-react";
+import { useMediaControls } from "./MediaControls";
+import { Track } from "livekit-client";
 
-  const [bgMode, setBgModeState] = useState("none");
-  const [processedVideoTrack, setProcessedVideoTrack] = useState(null);
-  const [debugError, setDebugError] = useState(null);
+const SFX_BASE = "https://kqvrjlnpxrlgxnmbdixd.supabase.co/storage/v1/object/public/sfx/";
 
-  const setBgMode = useCallback((mode) => {
-    bgModeRef.current = mode;
-    setBgModeState(mode);
-  }, []);
+const SFX_LIST = [
+  { label: "💨 Woosh", file: "mixkit-air-woosh-1489 (1).wav" },
+  { label: "⏰ Tick Tock", file: "mixkit-tick-tock-clock-timer-1045.wav" },
+  { label: "🤖 Hum", file: "mixkit-technological-futuristic-hum-2133.wav" },
+  { label: "😢 Sad Trombone", file: "mixkit-sad-game-over-trombone-471.wav" },
+  { label: "👊 Punch", file: "mixkit-martial-arts-fast-punch-2047.wav" },
+  { label: "🐦 Birds", file: "mixkit-little-birds-singing-in-the-trees-17.wav" },
+];
 
-  const setBackgroundImage = useCallback((urlOrFile) => {
-    const url =
-      typeof urlOrFile === "string" ? urlOrFile : URL.createObjectURL(urlOrFile);
-    const img = new Image();
-    img.onload = () => {
-      bgImageRef.current = img;
-    };
-    img.onerror = (err) => {
-      console.error("Failed to load background image:", err);
-      setDebugError("Background image failed to load.");
-    };
-    img.src = url;
-  }, []);
+export default function HostMediaPanel({ backgroundImageUrl }) {
+  const room = useRoomContext();
+  const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, sfx, debugError } =
+    useMediaControls({ backgroundImageUrl });
+  const [trackUrl, setTrackUrl] = useState("");
+  const [collapsed, setCollapsed] = useState(true); // start collapsed so video isn't blocked
+  const videoPublishedRef = useRef(false);
+  const audioPublishedRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      let camStream, videoEl, canvas, ctx;
-
-      try {
-        camStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            aspectRatio: { ideal: 16 / 9 },
-          },
-        });
-        videoEl = document.createElement("video");
-        videoEl.srcObject = camStream;
-        videoEl.muted = true;
-        videoEl.playsInline = true;
-        await videoEl.play();
-        videoElRef.current = videoEl;
-
-        const settings = camStream.getVideoTracks()[0].getSettings();
-        const actualWidth = settings.width || videoEl.videoWidth || 1280;
-        const actualHeight = settings.height || videoEl.videoHeight || 720;
-
-        canvas = document.createElement("canvas");
-        canvas.width = actualWidth;
-        canvas.height = actualHeight;
-        canvasRef.current = canvas;
-        ctx = canvas.getContext("2d");
-      } catch (err) {
-        console.error("Camera capture failed:", err);
-        setDebugError(`Camera error: ${err.message || err}`);
-        return;
-      }
-
-      if (backgroundImageUrl) {
-        setBackgroundImage(backgroundImageUrl);
-      }
-
-      try {
-        if (!window.SelfieSegmentation) {
-          throw new Error(
-            "SelfieSegmentation script not loaded — check index.html CDN script tag"
-          );
-        }
-
-        const segmenter = new window.SelfieSegmentation({
-          locateFile: (file) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
-        });
-        segmenter.setOptions({ modelSelection: 1 });
-
-        segmenter.onResults((results) => {
-          if (cancelled) return;
-          ctx.save();
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
-          ctx.globalCompositeOperation = "source-in";
-          ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-
-          ctx.globalCompositeOperation = "destination-over";
-          const mode = bgModeRef.current;
-          if (mode === "blur") {
-            ctx.filter = "blur(12px)";
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            ctx.filter = "none";
-          } else if (mode === "image" && bgImageRef.current) {
-            ctx.drawImage(bgImageRef.current, 0, 0, canvas.width, canvas.height);
-          } else {
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-          }
-          ctx.restore();
-        });
-
-        segmenterRef.current = segmenter;
-
-        const renderLoop = async () => {
-          if (cancelled) return;
-          try {
-            await segmenter.send({ image: videoEl });
-          } catch (err) {
-            console.error("Segmenter frame error:", err);
-            setDebugError(`Segmenter frame error: ${err.message || err}`);
-          }
-          rafRef.current = requestAnimationFrame(renderLoop);
-        };
-        renderLoop();
-      } catch (err) {
-        console.error(
-          "Segmenter failed to initialize — falling back to raw camera passthrough:",
-          err
-        );
-        setDebugError(`Segmenter init failed: ${err.message || err}`);
-        const fallbackLoop = () => {
-          if (cancelled) return;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-          rafRef.current = requestAnimationFrame(fallbackLoop);
-        };
-        fallbackLoop();
-      }
-
-      const canvasStream = canvas.captureStream(30);
-      const track = new LocalVideoTrack(canvasStream.getVideoTracks()[0]);
-      setProcessedVideoTrack(track);
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      segmenterRef.current?.close();
-    };
-  }, []);
-
-  const audioCtxRef = useRef(null);
-  const musicElRef = useRef(null);
-  const musicGainRef = useRef(null);
-  const sfxGainRef = useRef(null);
-  const [processedAudioTrack, setProcessedAudioTrack] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolumeState] = useState(0.5);
+    if (!room || !videoTrack || videoPublishedRef.current) return;
+    videoPublishedRef.current = true;
+    room.localParticipant
+      .publishTrack(videoTrack, { source: Track.Source.Camera })
+      .catch((err) => console.error("Failed to publish video track:", err));
+  }, [room, videoTrack]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!room || !audioTrack || audioPublishedRef.current) return;
+    audioPublishedRef.current = true;
+    room.localParticipant
+      .publishTrack(audioTrack, { source: Track.Source.Microphone })
+      .catch((err) => console.error("Failed to publish audio track:", err));
+  }, [room, audioTrack]);
 
-    async function initAudio() {
-      try {
-        const audioCtx = new AudioContext();
-        audioCtxRef.current = audioCtx;
+  const handleLoadTrack = () => {
+    if (!trackUrl) return;
+    music.loadTrack(trackUrl);
+  };
 
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        const micSource = audioCtx.createMediaStreamSource(micStream);
+  const handleLocalMusicFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) music.loadTrack(file);
+  };
 
-        const musicEl = document.createElement("audio");
-        musicEl.style.display = "none";
-        musicEl.setAttribute("playsinline", "");
-        document.body.appendChild(musicEl);
-        musicEl.muted = true;
-        musicEl.volume = 0;
-        musicElRef.current = musicEl;
-
-        const musicSource = audioCtx.createMediaElementSource(musicEl);
-        const musicGain = audioCtx.createGain();
-        musicGain.gain.value = volume;
-        musicGainRef.current = musicGain;
-        musicSource.connect(musicGain);
-
-        // ---------- SOUND EFFECTS BUS ----------
-        const sfxGain = audioCtx.createGain();
-        sfxGain.gain.value = 0.9;
-        sfxGainRef.current = sfxGain;
-
-        // ---------- LIMITER — caps the combined mix so it can't clip/distort ----------
-        const limiter = audioCtx.createDynamicsCompressor();
-        limiter.threshold.value = -6;
-        limiter.knee.value = 0;
-        limiter.ratio.value = 20;
-        limiter.attack.value = 0.003;
-        limiter.release.value = 0.25;
-
-        const destination = audioCtx.createMediaStreamDestination();
-
-        micSource.connect(limiter);
-        musicGain.connect(limiter);
-        sfxGain.connect(limiter);
-        limiter.connect(destination);
-
-        if (!cancelled) {
-          const track = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
-          setProcessedAudioTrack(track);
-        }
-      } catch (err) {
-        console.error("Failed to initialize audio/music pipeline:", err);
-        setDebugError(`Audio error: ${err.message || err}`);
-      }
+  const handleLocalImageFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBackgroundImage(file);
+      setBgMode("image");
     }
+  };
 
-    initAudio();
-    return () => {
-      cancelled = true;
-      audioCtxRef.current?.close();
-      if (musicElRef.current) {
-        musicElRef.current.remove();
-      }
-    };
-  }, []);
+  return (
+    <div style={wrapperStyle}>
+      <button style={toggleButtonStyle} onClick={() => setCollapsed((v) => !v)}>
+        {collapsed ? "▲ Media Controls" : "▼ Hide Media Controls"}
+      </button>
 
-  // Fetch remote URLs as blobs first — sidesteps Chrome/Android silently
-  // zeroing out cross-origin audio when it's captured into MediaStreamDestination.
-  // A blob: URL is always same-origin, so no tainting occurs.
-  const loadTrack = useCallback(async (urlOrFile) => {
-    if (!musicElRef.current) return;
-    if (typeof urlOrFile === "string") {
-      try {
-        const res = await fetch(urlOrFile);
-        const blob = await res.blob();
-        musicElRef.current.src = URL.createObjectURL(blob);
-      } catch (err) {
-        console.error("Failed to fetch track:", err);
-        setDebugError(`Track fetch failed: ${err.message || err}`);
-      }
-    } else {
-      musicElRef.current.src = URL.createObjectURL(urlOrFile);
-    }
-  }, []);
+      {!collapsed && (
+        <div style={panelStyle}>
+          {debugError && (
+            <div style={debugStyle}>⚠ {debugError}</div>
+          )}
 
-  const play = useCallback(() => {
-    audioCtxRef.current?.resume();
-    musicElRef.current
-      ?.play()
-      .catch((err) => console.error("Music play failed:", err));
-    setIsPlaying(true);
-  }, []);
+          <div style={rowStyle}>
+            <span style={labelStyle}>Background</span>
+            <button style={btn(bgMode === "none")} onClick={() => setBgMode("none")}>
+              None
+            </button>
+            <button style={btn(bgMode === "blur")} onClick={() => setBgMode("blur")}>
+              Blur
+            </button>
+            <label style={{ ...btn(bgMode === "image"), cursor: "pointer" }}>
+              Image
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLocalImageFile}
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
 
-  const pause = useCallback(() => {
-    musicElRef.current?.pause();
-    setIsPlaying(false);
-  }, []);
+          <div style={rowStyle}>
+            <span style={labelStyle}>Music</span>
+            <label style={{ ...btn(false), cursor: "pointer" }}>
+              Choose file
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={handleLocalMusicFile}
+                style={{ display: "none" }}
+              />
+            </label>
+            <input
+              type="text"
+              placeholder="or paste track URL"
+              value={trackUrl}
+              onChange={(e) => setTrackUrl(e.target.value)}
+              style={inputStyle}
+            />
+            <button style={btn(false)} onClick={handleLoadTrack}>
+              Load URL
+            </button>
+            <button style={btn(false)} onClick={music.isPlaying ? music.pause : music.play}>
+              {music.isPlaying ? "Pause" : "Play"}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={music.volume}
+              onChange={(e) => music.setVolume(parseFloat(e.target.value))}
+            />
+          </div>
 
-  const setVolume = useCallback((v) => {
-    setVolumeState(v);
-    if (musicGainRef.current) musicGainRef.current.gain.value = v;
-  }, []);
+          <div style={rowStyle}>
+            <span style={labelStyle}>SFX</span>
+            {SFX_LIST.map((s) => (
+              <button
+                key={s.file}
+                style={btn(false)}
+                onClick={() => sfx.play(SFX_BASE + encodeURIComponent(s.file))}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const playSfx = useCallback(async (url) => {
-    if (!audioCtxRef.current || !sfxGainRef.current) return;
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
+const wrapperStyle = {
+  position: "absolute",
+  bottom: 80,
+  left: 0,
+  right: 0,
+  zIndex: 20,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+};
 
-      const el = document.createElement("audio");
-      el.src = blobUrl;
-      el.muted = true;
-      el.volume = 0;
-      el.setAttribute("playsinline", "");
-      document.body.appendChild(el);
+const toggleButtonStyle = {
+  padding: "6px 16px",
+  borderRadius: "999px",
+  border: "1px solid #444",
+  background: "#1a1a1a",
+  color: "#fff",
+  fontSize: 12,
+  cursor: "pointer",
+  marginBottom: 6,
+  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+};
 
-      audioCtxRef.current.resume();
-      const source = audioCtxRef.current.createMediaElementSource(el);
-      source.connect(sfxGainRef.current);
+const panelStyle = {
+  width: "100%",
+  background: "rgba(0,0,0,0.6)",
+  padding: "10px 14px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
 
-      el.play().catch((err) => console.error("SFX play failed:", err));
-      el.onended = () => {
-        source.disconnect();
-        el.remove();
-        URL.revokeObjectURL(blobUrl);
-      };
-    } catch (err) {
-      console.error("SFX fetch/play failed:", err);
-      setDebugError(`SFX error: ${err.message || err}`);
-    }
-  }, []);
+const debugStyle = {
+  background: "rgba(255,0,0,0.15)",
+  border: "1px solid #ff6b6b",
+  color: "#ff6b6b",
+  fontSize: 11,
+  padding: "6px 8px",
+  borderRadius: 6,
+  wordBreak: "break-word",
+};
 
+const rowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const labelStyle = {
+  color: "#fff",
+  fontSize: 12,
+  width: 80,
+};
+
+const inputStyle = {
+  flex: 1,
+  minWidth: 120,
+  padding: "4px 8px",
+  borderRadius: 6,
+  border: "none",
+};
+
+function btn(active) {
   return {
-    videoTrack: processedVideoTrack,
-    audioTrack: processedAudioTrack,
-    bgMode,
-    setBgMode,
-    setBackgroundImage,
-    music: { loadTrack, play, pause, isPlaying, volume, setVolume },
-    sfx: { play: playSfx },
-    debugError,
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "none",
+    background: active ? "#e11d48" : "#333",
+    color: "#fff",
+    fontSize: 12,
   };
 }
