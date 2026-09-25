@@ -179,4 +179,11 @@ const inputStyle = {
 
 function btn(active) {
   return {
-    p
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "none",
+    background: active ? "#e11d48" : "#333",
+    color: "#fff",
+    fontSize: 12,
+  };
+}
