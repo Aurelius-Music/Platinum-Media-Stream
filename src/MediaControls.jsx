@@ -170,8 +170,8 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
 
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: false,
+            noiseSuppression: false,
             autoGainControl: false,
             channelCount: 1,
           },
