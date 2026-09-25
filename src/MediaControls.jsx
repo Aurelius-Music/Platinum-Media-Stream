@@ -1,8 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { LocalVideoTrack, LocalAudioTrack } from "livekit-client";
 // Note: no npm import for SelfieSegmentation — it's loaded via <script> in
-// index.html and used as window.SelfieSegmentation. This avoids the Vite
-// minification bug that broke the named npm import in production builds.
+// index.html and used as window.SelfieSegmentation.
 
 export function useMediaControls({ backgroundImageUrl } = {}) {
   const videoElRef = useRef(null);
@@ -152,10 +151,10 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
     };
   }, []);
 
-  const audioCtxRef = useRef(null);
-  const musicElRef = useRef(null);
-  const musicGainRef = useRef(null);
-  const sfxGainRef = useRef(null);
+  // ---------- AUDIO — TEST MODE: raw mic track, NO Web Audio processing ----------
+  // Bypasses AudioContext/limiter/music-mixing entirely to isolate whether the
+  // noise comes from our audio graph or something else. Music/SFX buttons are
+  // inert in this build — this is a diagnostic-only version.
   const [processedAudioTrack, setProcessedAudioTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolumeState] = useState(0.5);
@@ -165,9 +164,6 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
 
     async function initAudio() {
       try {
-        const audioCtx = new AudioContext();
-        audioCtxRef.current = audioCtx;
-
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -175,127 +171,40 @@ export function useMediaControls({ backgroundImageUrl } = {}) {
             autoGainControl: false,
           },
         });
-        const micSource = audioCtx.createMediaStreamSource(micStream);
-
-        const musicEl = document.createElement("audio");
-        musicEl.style.display = "none";
-        musicEl.setAttribute("playsinline", "");
-        document.body.appendChild(musicEl);
-        musicEl.muted = true;
-        musicEl.volume = 0;
-        musicElRef.current = musicEl;
-
-        const musicSource = audioCtx.createMediaElementSource(musicEl);
-        const musicGain = audioCtx.createGain();
-        musicGain.gain.value = volume;
-        musicGainRef.current = musicGain;
-        musicSource.connect(musicGain);
-
-        // ---------- SOUND EFFECTS BUS ----------
-        const sfxGain = audioCtx.createGain();
-        sfxGain.gain.value = 0.9;
-        sfxGainRef.current = sfxGain;
-
-        // ---------- LIMITER — gentle compressor, only catches genuine peaks ----------
-        const limiter = audioCtx.createDynamicsCompressor();
-        limiter.threshold.value = -12;
-        limiter.knee.value = 6;
-        limiter.ratio.value = 4;
-        limiter.attack.value = 0.02;
-        limiter.release.value = 0.3;
-
-        const destination = audioCtx.createMediaStreamDestination();
-
-        micSource.connect(limiter);
-        musicGain.connect(limiter);
-        sfxGain.connect(limiter);
-        limiter.connect(destination);
-
         if (!cancelled) {
-          const track = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
+          const track = new LocalAudioTrack(micStream.getAudioTracks()[0]);
           setProcessedAudioTrack(track);
         }
       } catch (err) {
-        console.error("Failed to initialize audio/music pipeline:", err);
-        setDebugError(`Audio error: ${err.message || err}`);
+        console.error("Failed to initialize raw mic track:", err);
+        setDebugError(`Audio error (raw mic test): ${err.message || err}`);
       }
     }
 
     initAudio();
     return () => {
       cancelled = true;
-      audioCtxRef.current?.close();
-      if (musicElRef.current) {
-        musicElRef.current.remove();
-      }
     };
   }, []);
 
-  // Fetch remote URLs as blobs first — sidesteps Chrome/Android silently
-  // zeroing out cross-origin audio when it's captured into MediaStreamDestination.
-  // A blob: URL is always same-origin, so no tainting occurs.
-  const loadTrack = useCallback(async (urlOrFile) => {
-    if (!musicElRef.current) return;
-    if (typeof urlOrFile === "string") {
-      try {
-        const res = await fetch(urlOrFile);
-        const blob = await res.blob();
-        musicElRef.current.src = URL.createObjectURL(blob);
-      } catch (err) {
-        console.error("Failed to fetch track:", err);
-        setDebugError(`Track fetch failed: ${err.message || err}`);
-      }
-    } else {
-      musicElRef.current.src = URL.createObjectURL(urlOrFile);
-    }
+  const loadTrack = useCallback(() => {
+    console.warn("Music disabled in this diagnostic build.");
   }, []);
 
   const play = useCallback(() => {
-    audioCtxRef.current?.resume();
-    musicElRef.current
-      ?.play()
-      .catch((err) => console.error("Music play failed:", err));
-    setIsPlaying(true);
+    console.warn("Music disabled in this diagnostic build.");
   }, []);
 
   const pause = useCallback(() => {
-    musicElRef.current?.pause();
     setIsPlaying(false);
   }, []);
 
   const setVolume = useCallback((v) => {
     setVolumeState(v);
-    if (musicGainRef.current) musicGainRef.current.gain.value = v;
   }, []);
 
-  const playSfx = useCallback(async (url) => {
-    if (!audioCtxRef.current || !sfxGainRef.current) return;
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-
-      const el = document.createElement("audio");
-      el.src = blobUrl;
-      el.muted = true;
-      el.volume = 0;
-      el.setAttribute("playsinline", "");
-      document.body.appendChild(el);
-
-      audioCtxRef.current.resume();
-      const source = audioCtxRef.current.createMediaElementSource(el);
-      source.connect(sfxGainRef.current);
-
-      el.play().catch((err) => console.error("SFX play failed:", err));
-      el.onended = () => {
-        source.disconnect();
-        el.remove();
-        URL.revokeObjectURL(blobUrl);
-      };
-    } catch (err) {
-      console.error("SFX fetch/play failed:", err);
-      setDebugError(`SFX error: ${err.message || err}`);
-    }
+  const playSfx = useCallback(() => {
+    console.warn("SFX disabled in this diagnostic build.");
   }, []);
 
   return {
