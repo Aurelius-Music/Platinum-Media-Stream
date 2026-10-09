@@ -18,10 +18,10 @@ const SFX_LIST = [
 
 export default function HostMediaPanel({ backgroundImageUrl }) {
   const room = useRoomContext();
-  const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, sfx, debugError } =
+  const { videoTrack, audioTrack, bgMode, setBgMode, setBackgroundImage, music, sfx, camera, debugError } =
     useMediaControls({ backgroundImageUrl });
   const [trackUrl, setTrackUrl] = useState("");
-  const [collapsed, setCollapsed] = useState(true); // start collapsed so video isn't blocked
+  const [open, setOpen] = useState(false);
   const videoPublishedRef = useRef(false);
   const audioPublishedRef = useRef(false);
 
@@ -60,16 +60,24 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
   };
 
   return (
-    <div style={wrapperStyle}>
-      <button style={toggleButtonStyle} onClick={() => setCollapsed((v) => !v)}>
-        {collapsed ? "▲ Media Controls" : "▼ Hide Media Controls"}
+    <>
+      <button style={pillStyle} onClick={() => setOpen((v) => !v)}>
+        {open ? "✕ Close" : "🎛 Media"}
       </button>
 
-      {!collapsed && (
+      {open && (
         <div style={panelStyle}>
-          {debugError && (
-            <div style={debugStyle}>⚠ {debugError}</div>
-          )}
+          {debugError && <div style={debugStyle}>⚠ {debugError}</div>}
+
+          <div style={rowStyle}>
+            <span style={labelStyle}>Camera</span>
+            <button
+              style={btn(false)}
+              onClick={() => camera?.switchCamera?.()}
+            >
+              🔄 Flip front/back
+            </button>
+          </div>
 
           <div style={rowStyle}>
             <span style={labelStyle}>Background</span>
@@ -138,36 +146,37 @@ export default function HostMediaPanel({ backgroundImageUrl }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-const wrapperStyle = {
-  position: "absolute",
-  bottom: 80,
-  left: 0,
-  right: 0,
-  zIndex: 20,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-};
-
-const toggleButtonStyle = {
-  padding: "6px 16px",
-  borderRadius: "999px",
+// Small pill, top-left — never near the bottom control bar or its popups.
+const pillStyle = {
+  position: "fixed",
+  top: 8,
+  left: 8,
+  zIndex: 30,
+  padding: "6px 10px",
+  borderRadius: 999,
   border: "1px solid #444",
   background: "#1a1a1a",
   color: "#fff",
   fontSize: 12,
   cursor: "pointer",
-  marginBottom: 6,
   boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
 };
 
+// Panel opens from the TOP, so the bottom control bar (mic/camera/chat/leave)
+// and its device menus are never covered. Scrolls if it gets tall.
 const panelStyle = {
-  width: "100%",
-  background: "rgba(0,0,0,0.6)",
+  position: "fixed",
+  top: 44,
+  left: 0,
+  right: 0,
+  maxHeight: "55vh",
+  overflowY: "auto",
+  zIndex: 29,
+  background: "rgba(0,0,0,0.85)",
   padding: "10px 14px",
   display: "flex",
   flexDirection: "column",
